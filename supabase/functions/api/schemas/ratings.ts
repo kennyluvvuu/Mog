@@ -50,10 +50,6 @@ export const uploadUrlRequestSchema = z
   .object({
     content_type: imageMimeTypeSchema.optional(),
     extension: imageExtensionSchema.optional(),
-    rating_id: z
-      .string()
-      .uuid({ message: "rating_id должен быть валидным UUID" })
-      .optional(),
   })
   .refine(
     (data) => Boolean(data.content_type || data.extension),

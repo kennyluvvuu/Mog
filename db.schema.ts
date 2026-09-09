@@ -3,7 +3,6 @@ import {
   index,
   jsonb,
   numeric,
-  pgEnum,
   pgPolicy,
   pgTable,
   text,
@@ -116,5 +115,5 @@ export const ratingsRelations = relations(ratings, ({ one }) => ({
   }),
 }));
 
-// Re-export types
-export type * from "./db.types.ts";
+// Re-export enums and types
+export * from "./db.types.ts";

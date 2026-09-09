@@ -2,9 +2,15 @@
   "version": "5",
   "specifiers": {
     "jsr:@supabase/functions-js@2": "2.116.0",
+    "jsr:@supabase/supabase-js@2": "2.116.0",
     "npm:@ai-sdk/groq@^4.0.37": "4.0.37_zod@4.5.4",
     "npm:@hono/zod-validator@~0.9.1": "0.9.1_hono@4.13.7_zod@4.5.4",
+    "npm:@supabase/auth-js@2.116.0": "2.116.0",
+    "npm:@supabase/functions-js@2.116.0": "2.116.0",
+    "npm:@supabase/postgrest-js@2.116.0": "2.116.0",
+    "npm:@supabase/realtime-js@2.116.0": "2.116.0",
     "npm:@supabase/server@1": "1.5.3_@supabase+supabase-js@2.116.0_hono@4.13.7",
+    "npm:@supabase/storage-js@2.116.0": "2.116.0",
     "npm:ai@^7.0.93": "7.0.93_zod@4.5.4",
     "npm:drizzle-orm@~0.45.2": "0.45.2",
     "npm:hono@^4.13.7": "4.13.7",
@@ -16,6 +22,16 @@
       "integrity": "4c0ae3a9deda4c198c08f98a8975229244c9c6b3750aeb03993dc6db96ba7006",
       "dependencies": [
         "npm:openai"
+      ]
+    },
+    "@supabase/supabase-js@2.116.0": {
+      "integrity": "3005b560a70ba75504f9c11ec48cb05cec71d86d715a3c15be574394963270e0",
+      "dependencies": [
+        "npm:@supabase/auth-js",
+        "npm:@supabase/functions-js@2.116.0",
+        "npm:@supabase/postgrest-js",
+        "npm:@supabase/realtime-js",
+        "npm:@supabase/storage-js"
       ]
     }
   },
@@ -382,6 +398,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@supabase/functions-js@2",
+      "jsr:@supabase/supabase-js@2",
       "npm:@ai-sdk/groq@^4.0.37",
       "npm:@hono/zod-validator@~0.9.1",
       "npm:@supabase/server@1",

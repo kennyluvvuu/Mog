@@ -1,46 +1,83 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
-
-// Setup type definitions for built-in Supabase Runtime APIs
 import "@supabase/functions-js/edge-runtime.d.ts";
-import { withSupabase } from "@supabase/server";
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { logger } from "hono/logger";
+import type { AppEnv } from "./types.ts";
+import { authRouter } from "./routes/auth.ts";
+import { ratingsRouter } from "./routes/ratings.ts";
+import { streamRouter } from "./routes/stream.ts";
 
-console.log("Hello from Functions!");
+const app = new Hono<AppEnv>();
 
-// This endpoint uses 'publishable' | 'secret' access, apiKey is required.
-// Use publishable for Client-facing, key-validated endpoints
-// Use secret for Server-to-server, internal calls
-export default {
-  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, ctx) => {
-    // Called by another service with a secret key
-    // ctx.supabaseAdmin bypasses RLS — use for privileged operations
-    /*
-    if (ctx.authMode === "secret") {
-      const { user_id } = await req.json();
-      const { data } = await ctx.supabaseAdmin.auth.admin.getUserById(user_id);
+// Глобальные middleware: логирование и CORS
+app.use("*", logger());
+app.use(
+  "*",
+  cors({
+    origin: "*",
+    allowHeaders: [
+      "authorization",
+      "x-client-info",
+      "apikey",
+      "content-type",
+    ],
+    allowMethods: ["POST", "GET", "OPTIONS", "PUT", "DELETE", "PATCH"],
+    exposeHeaders: ["content-length"],
+    maxAge: 600,
+    credentials: true,
+  })
+);
 
-      return Response.json({
-        email: data?.user?.email,
-      });
-    }
-    */
+// Глобальный обработчик ошибок
+app.onError((err, c) => {
+  console.error("Необработанная ошибка API:", err);
+  return c.json(
+    {
+      error: "InternalServerError",
+      message: err.message || "Внутренняя ошибка сервера",
+    },
+    500
+  );
+});
 
-    const { name } = await req.json();
+// Роутер API
+const api = new Hono<AppEnv>();
 
-    return Response.json({
-      message: `Hello ${name}!`,
-    });
-  }),
-};
+// Healthcheck
+api.get("/health", (c) =>
+  c.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+  })
+);
 
-/* To invoke locally:
+// Подключение модульных маршрутов
+api.route("/me", authRouter);
+api.route("/ratings", streamRouter);
+api.route("/ratings", ratingsRouter);
 
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
+// Поддержка различных префиксов роутинга в Supabase Edge Functions:
+// 1. /functions/v1/api (вызов через Supabase API Gateway)
+// 2. /api (пользовательский reverse proxy)
+// 3. / (прямой вызов функции)
+app.route("/functions/v1/api", api);
+app.route("/api", api);
+app.route("/", api);
 
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/api' \
-    --header 'apiKey: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH' \
-    --data '{"name":"Functions"}'
+// 404 handler
+app.notFound((c) =>
+  c.json(
+    {
+      error: "NotFound",
+      message: `Маршрут ${c.req.method} ${c.req.path} не найден`,
+    },
+    404
+  )
+);
 
-*/
+// Запуск HTTP-сервера для среды Supabase Edge Runtime / Deno
+if (import.meta.main) {
+  Deno.serve(app.fetch);
+}
+
+export default app;
