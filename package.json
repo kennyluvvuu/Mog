@@ -1,0 +1,27 @@
+{
+  "name": "mog",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "supabase:start": "bunx supabase start",
+    "supabase:stop": "bunx supabase stop",
+    "supabase:status": "bunx supabase status",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "mcp": "bunx mcp-server-supabase"
+  },
+  "devDependencies": {
+    "@supabase/mcp-server-supabase": "^0.12.0",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  },
+  "dependencies": {
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.23.0"
+  }
+}

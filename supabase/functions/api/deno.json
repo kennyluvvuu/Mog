@@ -1,0 +1,12 @@
+{
+  "imports": {
+    "@ai-sdk/groq": "npm:@ai-sdk/groq@^4.0.37",
+    "@hono/zod-validator": "npm:@hono/zod-validator@^0.9.1",
+    "@supabase/functions-js": "jsr:@supabase/functions-js@^2",
+    "@supabase/server": "npm:@supabase/server@^1",
+    "ai": "npm:ai@^7.0.93",
+    "drizzle-orm": "npm:drizzle-orm@^0.45.2",
+    "hono": "npm:hono@^4.13.7",
+    "zod": "npm:zod@^4.5.4"
+  }
+}
