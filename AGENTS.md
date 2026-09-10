@@ -183,9 +183,11 @@ sequenceDiagram
   - `GET /me`: Получить текущий профиль пользователя. Выполняет ленивый `upsert` в таблицу `profiles` по данным из JWT (`sub`, `email`).
   - `POST /ratings/upload-url`: Сгенерировать pre-signed URL на загрузку изображения в приватный bucket `ratings_photos` на ограниченное время (например, 15 минут).
   - `POST /ratings`: Зарегистрировать новую оценку после загрузки фото, создать запись в БД со статусом `pending` и отправить задачу в `pgmq`.
-  - `GET /ratings`: Получить историю оценок текущего пользователя с пагинацией (limit/offset или cursor).
-  - `GET /ratings/:id`: Получить данные конкретной оценки (включая временный signed URL на просмотр фото).
   - `GET /ratings/:id/stream`: Server-Sent Events (SSE) эндпоинт. Осуществляет периодический опрос строки оценки в БД или прослушивание через LISTEN/NOTIFY и шлет клиенту обновления статуса (`pending` -> `processing` -> `completed` / `failed`).
+
+> [!NOTE]
+> **CRUD операции через встроенный Supabase PostgREST:**
+> Стандартные операции чтения истории оценок (`GET /rest/v1/ratings`), выборки по ID (`GET /rest/v1/ratings?id=eq.<id>`), сортировки и пагинации полностью покрываются встроенным **PostgREST** (`supabase.from('ratings').select(...)`) с соблюдением Row-Level Security (RLS: `ratings_select_own`). Дублировать базовые CRUD-эндпоинты в Hono Edge Function запрещено — Edge API используется исключительно для специфичной бизнес-логики (pre-signed upload URLs, постановка задач в `pgmq`, SSE-стриминг).
 
 ### 6.2. Фоновый воркер (`worker/`)
 - Написан на **Bun**.
@@ -269,3 +271,6 @@ bun run --watch worker/index.ts
    - Каждая упавшая задача должна обновлять запись в `ratings` со статусом `'failed'` и описанием ошибки, чтобы клиент не зависал в состоянии `'processing'`.
 5. **Сохранение типов:**
    - Все типы сущностей (`Profile`, `Rating`, `LooksmaxxingTier`, `RatingMetrics`, `RatingTips`) должны экспортироваться из `db.schema.ts` или общего модуля типов и переиспользоваться в Hono и воркере.
+6. **Не дублировать CRUD в Edge API:**
+   - Все стандартные операции чтения, выборки, фильтрации, пагинации и мутаций таблиц выполняются клиентом напрямую через встроенный **Supabase PostgREST** (`/rest/v1/`) с соблюдением политик RLS.
+   - В Hono Edge Functions (`supabase/functions/api/`) реализуются исключительно кастомные сценарии: генерация pre-signed upload URLs для Storage, постановка задач в очередь `pgmq` и Server-Sent Events (SSE) стриминг.
