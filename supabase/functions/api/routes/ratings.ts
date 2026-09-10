@@ -259,10 +259,7 @@ ratingsRouter.post(
         );
       }
 
-      // 2. Убеждаемся в наличии профиля (lazy upsert)
-      await getOrCreateProfile(supabaseAdmin, user);
-
-      // 3. Если передан конкретный rating_id, проверяем идемпотентность
+      // 2. Если передан конкретный rating_id, проверяем идемпотентность
       if (body.rating_id) {
         const { data: existingRating } = await supabaseAdmin
           .from("ratings")
@@ -284,7 +281,7 @@ ratingsRouter.post(
         }
       }
 
-      // 4. Вставляем запись в таблицу ratings.
+      // 3. Вставляем запись в таблицу ratings.
       // Если rating_id не указан явно, id генерирует сама БД через DEFAULT gen_random_uuid()
       const insertPayload: {
         user_id: string;
@@ -301,17 +298,52 @@ ratingsRouter.post(
         insertPayload.id = body.rating_id;
       }
 
-      const { data: newRating, error: insertError } = await supabaseAdmin
+      let newRating: { id: string; created_at: string; status: string } | null = null;
+
+      const { data: insertedData, error: insertError } = await supabaseAdmin
         .from("ratings")
         .insert(insertPayload)
         .select()
         .single();
 
-      if (insertError || !newRating) {
+      if (insertError) {
+        // Если ошибка FK (23503 - профиля еще нет), лениво создаем профиль и повторяем вставку
+        if (insertError.code === "23503") {
+          await getOrCreateProfile(supabaseAdmin, user);
+          const { data: retryData, error: retryError } = await supabaseAdmin
+            .from("ratings")
+            .insert(insertPayload)
+            .select()
+            .single();
+
+          if (retryError || !retryData) {
+            return c.json(
+              {
+                error: "DatabaseError",
+                message: `Не удалось сохранить запись оценки: ${retryError?.message ?? "неизвестная ошибка"}`,
+              },
+              500
+            );
+          }
+          newRating = retryData;
+        } else {
+          return c.json(
+            {
+              error: "DatabaseError",
+              message: `Не удалось сохранить запись оценки: ${insertError.message}`,
+            },
+            500
+          );
+        }
+      } else {
+        newRating = insertedData;
+      }
+
+      if (!newRating) {
         return c.json(
           {
             error: "DatabaseError",
-            message: `Не удалось сохранить запись оценки: ${insertError?.message ?? "неизвестная ошибка"}`,
+            message: "Не удалось получить созданную запись оценки",
           },
           500
         );
