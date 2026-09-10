@@ -1,4 +1,4 @@
-import type { Context, MiddlewareHandler } from "hono";
+import type { MiddlewareHandler } from "hono";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import type { AppEnv, Profile } from "../types.ts";
 
@@ -44,7 +44,7 @@ export async function getOrCreateProfile(
   user: User
 ): Promise<Profile> {
   // Сначала проверяем существование профиля
-  const { data: existing, error: selectError } = await supabaseAdmin
+  const { data: existing } = await supabaseAdmin
     .from("profiles")
     .select("*")
     .eq("id", user.id)
