@@ -242,8 +242,14 @@ ratingsRouter.post(
     const supabaseAdmin = c.get("supabaseAdmin");
 
     try {
-      // 1. Проверяем, что фото загружено именно в каталог текущего пользователя
-      if (!body.photo_path.startsWith(`${user.id}/`)) {
+      // 1. Нормализуем путь к фото: убираем начальные слэши и префикс бакета, если он был передан
+      let photoPath = body.photo_path.trim().replace(/^\/+/, "");
+      if (photoPath.startsWith(`${RATINGS_BUCKET}/`)) {
+        photoPath = photoPath.substring(RATINGS_BUCKET.length + 1);
+      }
+
+      // Проверяем, что фото загружено именно в каталог текущего пользователя
+      if (!photoPath.startsWith(`${user.id}/`)) {
         return c.json(
           {
             error: "Forbidden",
@@ -287,7 +293,7 @@ ratingsRouter.post(
         id?: string;
       } = {
         user_id: user.id,
-        photo_path: body.photo_path,
+        photo_path: photoPath,
         status: "pending",
       };
 
@@ -320,7 +326,7 @@ ratingsRouter.post(
         queueMsgId = await enqueueRatingTask(supabaseAdmin, {
           ratingId,
           userId: user.id,
-          photoPath: body.photo_path,
+          photoPath: photoPath,
           ratingMode: body.rating_mode,
         });
       } catch (queueError) {
@@ -353,7 +359,7 @@ ratingsRouter.post(
         {
           rating_id: ratingId,
           status: "pending",
-          photo_path: body.photo_path,
+          photo_path: photoPath,
           rating_mode: body.rating_mode,
           queue_msg_id: queueMsgId,
           created_at: newRating.created_at,
