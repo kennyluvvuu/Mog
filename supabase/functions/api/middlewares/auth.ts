@@ -1,7 +1,6 @@
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
-import type { AppEnv } from "../types.ts";
-import type { Profile } from "../../../../db.types.ts";
+import type { AppEnv, Profile } from "../types.ts";
 
 /**
  * Создает клиенты Supabase для контекста Edge Function:
