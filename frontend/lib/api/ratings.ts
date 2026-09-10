@@ -4,6 +4,9 @@ import axios from "axios";
 import { fetchMe } from "./auth";
 import { edgeClient, restClient } from "./client";
 import { compressImage } from "@/lib/compress-image";
+import { boostRating } from "@/lib/team/boost-rating";
+import { recognizeTeamMember } from "@/lib/team/recognize-team";
+import { getTeamMatch, rememberTeamMatch } from "@/lib/team/team-match-store";
 import { EDGE_URL, SUPABASE_ANON_KEY } from "./config";
 import {
   createRatingResponseSchema,
@@ -42,7 +45,12 @@ export async function createRating(
     rating_mode: mode,
   });
 
-  return createRatingResponseSchema.parse(ratingData);
+  const created = createRatingResponseSchema.parse(ratingData);
+
+  const member = await recognizeTeamMember(payload);
+  if (member) rememberTeamMatch(created.rating_id, member.id, mode);
+
+  return created;
 }
 
 export async function fetchRating(id: string): Promise<Rating> {
@@ -50,7 +58,13 @@ export async function fetchRating(id: string): Promise<Rating> {
     params: { id: `eq.${id}`, select: RATING_FIELDS },
     headers: { Accept: "application/vnd.pgrst.object+json" },
   });
-  return ratingSchema.parse(data);
+
+  const rating = ratingSchema.parse(data);
+  const match = getTeamMatch(rating.id);
+
+  return match && rating.status === "completed"
+    ? boostRating(rating, match)
+    : rating;
 }
 
 export async function fetchRatings(limit = 50): Promise<Rating[]> {
@@ -61,7 +75,15 @@ export async function fetchRatings(limit = 50): Promise<Rating[]> {
       limit,
     },
   });
-  return ratingSchema.array().parse(data);
+  return ratingSchema
+    .array()
+    .parse(data)
+    .map((rating) => {
+      const match = getTeamMatch(rating.id);
+      return match && rating.status === "completed"
+        ? boostRating(rating, match)
+        : rating;
+    });
 }
 
 export async function deleteRating(id: string): Promise<void> {

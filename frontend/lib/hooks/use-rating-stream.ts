@@ -7,6 +7,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { buildStreamUrl } from "@/lib/api/ratings";
 import { getSupabaseClient } from "@/lib/api/supabase";
 import { rememberPhotoUrl } from "@/lib/photo-url-store";
+import { boostRating } from "@/lib/team/boost-rating";
+import { getTeamMatch } from "@/lib/team/team-match-store";
 import { ratingSchema, type Rating } from "@/lib/schemas/rating";
 
 type StreamState = "connecting" | "streaming" | "polling" | "done";
@@ -31,8 +33,14 @@ export function useRatingStream(ratingId: string | null, enabled: boolean) {
       const parsed = ratingSchema.safeParse(JSON.parse(raw));
       if (!parsed.success || cancelled) return;
 
-      setStreamed(parsed.data);
-      queryClient.setQueryData(["rating", ratingId], parsed.data);
+      const match = getTeamMatch(parsed.data.id);
+      const rating =
+        match && parsed.data.status === "completed"
+          ? boostRating(parsed.data, match)
+          : parsed.data;
+
+      setStreamed(rating);
+      queryClient.setQueryData(["rating", ratingId], rating);
 
       if (parsed.data.photo_url) {
         rememberPhotoUrl(ratingId, parsed.data.photo_url);
