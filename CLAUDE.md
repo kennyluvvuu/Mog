@@ -1,0 +1,1 @@
+стэк для фронта: nextjs, reqct query (tanstack query), axios, tailwind, shadcn, sonner, ts, zod, если нужно реализовать что-то тяжелое лучше найти в инете библиотеку и использовать ее
