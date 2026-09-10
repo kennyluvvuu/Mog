@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { AppEnv } from "../types.ts";
 import { authMiddleware } from "../middlewares/auth.ts";
-import { RATINGS_BUCKET } from "./ratings.ts";
+import { RATINGS_BUCKET, resolvePublicStorageUrl } from "./ratings.ts";
 
 export const streamRouter = new Hono<AppEnv>();
 
@@ -108,7 +108,13 @@ streamRouter.get("/:id/stream", async (c) => {
           const { data: signedData } = await supabaseAdmin.storage
             .from(RATINGS_BUCKET)
             .createSignedUrl(currentRating.photo_path, 3600);
-          photoUrl = signedData?.signedUrl ?? null;
+          if (signedData?.signedUrl) {
+            photoUrl = resolvePublicStorageUrl(
+              signedData.signedUrl,
+              c.req.url,
+              c.req.raw.headers
+            );
+          }
         }
 
         await stream.writeSSE({

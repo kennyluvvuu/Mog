@@ -17,6 +17,90 @@ ratingsRouter.use("*", authMiddleware);
 export const RATINGS_BUCKET = "ratings_photos";
 
 /**
+ * Преобразует внутренний URL Supabase Storage (например, http://kong:8000/...)
+ * в публичный URL (http://127.0.0.1:54321/...), доступный клиенту вне Docker-сети.
+ */
+export function resolvePublicStorageUrl(
+  internalUrl: string,
+  reqUrl?: string,
+  headers?: Headers
+): string {
+  if (!internalUrl) return internalUrl;
+
+  try {
+    const parsed = new URL(internalUrl);
+
+    // 1. Приоритет: явная переменная окружения
+    const envPublicUrl =
+      Deno.env.get("PUBLIC_SUPABASE_URL") ||
+      Deno.env.get("SUPABASE_PUBLIC_URL") ||
+      Deno.env.get("API_URL");
+
+    if (envPublicUrl) {
+      const publicOrigin = new URL(envPublicUrl).origin;
+      return `${publicOrigin}${parsed.pathname}${parsed.search}`;
+    }
+
+    // 2. Извлекаем протокол, хост и порт из заголовков запроса
+    let proto = "http";
+    let host = "";
+    let port = "";
+
+    if (headers) {
+      proto = headers.get("x-forwarded-proto") || "http";
+      const rawHost = headers.get("x-forwarded-host") || headers.get("host") || "";
+      const forwardedPort = headers.get("x-forwarded-port") || "";
+
+      if (rawHost.includes(":")) {
+        const [h, p] = rawHost.split(":");
+        host = h;
+        port = p;
+      } else {
+        host = rawHost;
+        port = forwardedPort;
+      }
+    }
+
+    // Проверяем, является ли хост внутренним для Docker или пустым
+    const isInternalHost = (h: string) =>
+      !h ||
+      h === "kong" ||
+      h === "supabase-kong" ||
+      h.startsWith("supabase_") ||
+      h.startsWith("172.");
+
+    // 3. Если из заголовков хост не получен или внутренний, пробуем reqUrl
+    if (isInternalHost(host) && reqUrl) {
+      try {
+        const reqParsed = new URL(reqUrl);
+        proto = reqParsed.protocol.replace(":", "");
+        host = reqParsed.hostname;
+        port = reqParsed.port;
+      } catch {
+        // ignore
+      }
+    }
+
+    // 4. Если хост все еще внутренний или пустой, ставим 127.0.0.1:54321
+    if (isInternalHost(host)) {
+      host = "127.0.0.1";
+      port = "54321";
+    }
+
+    // 5. Для локальных адресов (127.0.0.1 / localhost): если порт не задан или равен 80,
+    // в локальном Supabase Kong всегда слушает на порту 54321
+    if ((host === "127.0.0.1" || host === "localhost") && (!port || port === "80")) {
+      port = "54321";
+    }
+
+    const hostWithPort = port && port !== "80" && port !== "443" ? `${host}:${port}` : host;
+    return `${proto}://${hostWithPort}${parsed.pathname}${parsed.search}`;
+  } catch (_e) {
+    return internalUrl;
+  }
+}
+
+/**
  * Убеждается, что приватный бакет для фотографий оценок существует в Supabase Storage
  */
 export async function ensureRatingsBucket(supabaseAdmin: SupabaseClient): Promise<void> {
@@ -107,8 +191,15 @@ ratingsRouter.post(
         );
       }
 
+      // Преобразуем внутренний Docker URL в доступный клиенту
+      const publicUploadUrl = resolvePublicStorageUrl(
+        data.signedUrl,
+        c.req.url,
+        c.req.raw.headers
+      );
+
       return c.json({
-        upload_url: data.signedUrl,
+        upload_url: publicUploadUrl,
         photo_path: photoPath,
         token: data.token,
         expires_in: 900,
@@ -322,7 +413,13 @@ ratingsRouter.get("/", async (c) => {
           const { data: signedData } = await supabaseAdmin.storage
             .from(RATINGS_BUCKET)
             .createSignedUrl(item.photo_path, 3600);
-          photoUrl = signedData?.signedUrl ?? null;
+          if (signedData?.signedUrl) {
+            photoUrl = resolvePublicStorageUrl(
+              signedData.signedUrl,
+              c.req.url,
+              c.req.raw.headers
+            );
+          }
         }
 
         return {
@@ -395,7 +492,13 @@ ratingsRouter.get("/:id", async (c) => {
       const { data: signedData } = await supabaseAdmin.storage
         .from(RATINGS_BUCKET)
         .createSignedUrl(rating.photo_path, 3600);
-      photoUrl = signedData?.signedUrl ?? null;
+      if (signedData?.signedUrl) {
+        photoUrl = resolvePublicStorageUrl(
+          signedData.signedUrl,
+          c.req.url,
+          c.req.raw.headers
+        );
+      }
     }
 
     return c.json({
