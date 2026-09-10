@@ -10,7 +10,10 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "mcp": "bunx mcp-server-supabase"
+    "mcp": "bunx mcp-server-supabase",
+    "worker:start": "bun run worker/index.ts",
+    "worker:dev": "bun run --watch worker/index.ts",
+    "worker:test": "bun test worker"
   },
   "devDependencies": {
     "@supabase/mcp-server-supabase": "^0.12.0",
