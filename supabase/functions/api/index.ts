@@ -51,17 +51,22 @@ api.get("/health", (c) =>
   })
 );
 
-// Подключение модульных маршрутов
+// Подключение модульных маршрутов (с поддержкой trailing slash и без)
 api.route("/me", authRouter);
+api.route("/me/", authRouter);
 api.route("/ratings", streamRouter);
+api.route("/ratings/", streamRouter);
 api.route("/ratings", ratingsRouter);
+api.route("/ratings/", ratingsRouter);
 
 // Поддержка различных префиксов роутинга в Supabase Edge Functions:
 // 1. /functions/v1/api (вызов через Supabase API Gateway)
 // 2. /api (пользовательский reverse proxy)
 // 3. / (прямой вызов функции)
 app.route("/functions/v1/api", api);
+app.route("/functions/v1/api/", api);
 app.route("/api", api);
+app.route("/api/", api);
 app.route("/", api);
 
 // 404 handler
