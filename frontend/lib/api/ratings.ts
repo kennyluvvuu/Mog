@@ -3,6 +3,7 @@
 import axios from "axios";
 import { fetchMe } from "./auth";
 import { edgeClient, restClient } from "./client";
+import { compressImage } from "@/lib/compress-image";
 import { EDGE_URL, SUPABASE_ANON_KEY } from "./config";
 import {
   createRatingResponseSchema,
@@ -23,14 +24,17 @@ export async function createRating(
   // Профиль создаётся лениво, а ratings ссылается на него внешним ключом
   await fetchMe();
 
+  // Ужимаем кадр, иначе Vision-модель упирается в лимит токенов
+  const payload = await compressImage(file);
+
   // Полный цикл: pre-signed URL -> прямая загрузка в Storage -> регистрация в очереди
   const { data: urlData } = await edgeClient.post("/ratings/upload-url", {
-    content_type: file.type,
+    content_type: payload.type,
   });
   const uploadPlan = uploadUrlResponseSchema.parse(urlData);
 
-  await axios.put(uploadPlan.upload_url, file, {
-    headers: { "Content-Type": file.type },
+  await axios.put(uploadPlan.upload_url, payload, {
+    headers: { "Content-Type": payload.type },
   });
 
   const { data: ratingData } = await edgeClient.post("/ratings", {

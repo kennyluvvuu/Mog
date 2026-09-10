@@ -1,13 +1,26 @@
 "use client";
 
-// Съёмка фото с веб-камеры: живое превью, снимок кадра и обработка ошибок доступа
+// Съёмка фото с веб-камеры: автозапуск сканирования и автоматический снимок при попадании лица в рамку
 
 import { Camera, Loader2, X } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FaceScanOverlay } from "./FaceScanOverlay";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useCamera } from "@/lib/hooks/use-camera";
+import { useFaceDetector, type FaceFrameStatus } from "@/lib/hooks/use-face-detector";
+
+const HINTS: Record<FaceFrameStatus, string> = {
+  loading: "Загружаем модуль распознавания лица...",
+  unavailable: "Автоскан недоступен — снимите фото вручную",
+  searching: "Расположите лицо по центру круга",
+  "too-far": "Придвиньтесь ближе к камере",
+  "too-close": "Отодвиньтесь немного назад",
+  "off-center": "Выровняйте лицо по центру",
+  holding: "Не двигайтесь, идёт сканирование...",
+  ready: "Лицо зафиксировано — делаем снимок",
+};
 
 interface CameraCaptureProps {
   onCapture: (file: File) => void;
@@ -15,24 +28,64 @@ interface CameraCaptureProps {
 }
 
 export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
-  const { videoRef, isActive, isStarting, error, start, stop, capture } =
-    useCamera();
+  const { videoRef, isActive, isStarting, error, start, stop, capture } = useCamera();
+  const [video, setVideo] = useState<HTMLVideoElement | null>(null);
+  const hasCapturedRef = useRef(false);
+
+  const { status, box, holdProgress, reset } = useFaceDetector(video, isActive);
+
+  const attachVideo = useCallback(
+    (element: HTMLVideoElement | null) => {
+      videoRef.current = element;
+      setVideo(element);
+    },
+    [videoRef]
+  );
 
   useEffect(() => {
     void start();
   }, [start]);
 
-  const handleShoot = async () => {
-    const file = await capture();
-    if (!file) return;
+  useEffect(() => {
+    if (status !== "ready" || hasCapturedRef.current) return;
 
-    stop();
-    onCapture(file);
-  };
+    hasCapturedRef.current = true;
+
+    // Небольшая пауза, чтобы пользователь увидел завершённый цикл сканирования
+    const timer = setTimeout(async () => {
+      const file = await capture();
+      stop();
+
+      if (file) {
+        onCapture(file);
+        return;
+      }
+
+      hasCapturedRef.current = false;
+      reset();
+    }, 420);
+
+    return () => clearTimeout(timer);
+  }, [status, capture, stop, onCapture, reset]);
 
   const handleClose = () => {
     stop();
     onClose();
+  };
+
+  const handleManualShoot = async () => {
+    const file = await capture();
+    if (!file) return;
+
+    hasCapturedRef.current = true;
+    stop();
+    onCapture(file);
+  };
+
+  const handleRetry = () => {
+    hasCapturedRef.current = false;
+    reset();
+    void start();
   };
 
   return (
@@ -44,7 +97,7 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
     >
       <div className="relative aspect-square w-full bg-black/60">
         <video
-          ref={videoRef}
+          ref={attachVideo}
           playsInline
           muted
           className="size-full -scale-x-100 object-cover"
@@ -58,12 +111,7 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
         )}
 
         {isActive && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 flex items-center justify-center"
-          >
-            <div className="size-[62%] rounded-[50%] border-2 border-dashed border-white/25" />
-          </div>
+          <FaceScanOverlay status={status} box={box} holdProgress={holdProgress} />
         )}
       </div>
 
@@ -75,32 +123,29 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
         )}
 
         <div className="flex items-center justify-between gap-3">
-          <p className="hidden text-sm text-muted-foreground sm:block">
-            Расположите лицо по центру круга
+          <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+            {error ? "Камера недоступна" : HINTS[status]}
           </p>
 
-          <div className="flex flex-1 gap-2 sm:flex-none">
-            <Button variant="ghost" size="sm" onClick={handleClose}>
-              <X className="size-4" />
-              Отмена
+          {error ? (
+            <Button size="sm" onClick={handleRetry}>
+              Повторить
             </Button>
+          ) : (
+            <div className="flex shrink-0 gap-2">
+              <Button variant="ghost" size="sm" onClick={handleClose}>
+                <X className="size-4" />
+                Отмена
+              </Button>
 
-            {error ? (
-              <Button size="sm" onClick={() => void start()}>
-                Повторить
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                className="flex-1 sm:flex-none"
-                disabled={!isActive}
-                onClick={handleShoot}
-              >
-                <Camera className="size-4" />
-                Снять
-              </Button>
-            )}
-          </div>
+              {status === "unavailable" && (
+                <Button size="sm" disabled={!isActive} onClick={handleManualShoot}>
+                  <Camera className="size-4" />
+                  Снять
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

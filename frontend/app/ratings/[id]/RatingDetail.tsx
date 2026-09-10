@@ -4,19 +4,27 @@
 
 import Link from "next/link";
 import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
-import { AnalysisProgress } from "@/components/rating/AnalysisProgress";
+import { AnalysisScan } from "@/components/rating/AnalysisScan";
 import { RatingResult } from "@/components/rating/RatingResult";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useRatingStream } from "@/lib/hooks/use-rating-stream";
 import { useDeleteRating, useRating } from "@/lib/hooks/use-ratings";
+import { resolvePhotoUrl } from "@/lib/api/photo";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
 export function RatingDetail({ id }: { id: string }) {
   const router = useRouter();
-  const { isPolling } = useRatingStream(id, true);
+  useRatingStream(id, true);
   const { data: rating, isPending, isError } = useRating(id, true);
   const deleteRating = useDeleteRating();
+  const { data: photoUrl } = useQuery({
+    queryKey: ["photo-url", id],
+    queryFn: () => resolvePhotoUrl(id),
+    staleTime: 50 * 60 * 1000,
+    retry: false,
+  });
 
   if (isPending) {
     return (
@@ -62,7 +70,7 @@ export function RatingDetail({ id }: { id: string }) {
       </div>
 
       {isRunning && (
-        <AnalysisProgress status={rating.status} isPolling={isPolling} />
+        <AnalysisScan previewUrl={photoUrl ?? null} status={rating.status} />
       )}
 
       {rating.status === "failed" && (

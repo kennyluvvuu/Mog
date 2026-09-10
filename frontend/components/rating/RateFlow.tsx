@@ -1,11 +1,11 @@
 "use client";
 
-// Основной сценарий получения оценки: выбор фото и режима, отправка и живой прогресс
+// Основной сценарий получения оценки: выбор фото и режима, отправка и анимация сканирования
 
 import { Loader2, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { AnalysisProgress } from "./AnalysisProgress";
+import { AnalysisScan } from "./AnalysisScan";
 import { CameraCapture } from "./CameraCapture";
 import { ModeSelector } from "./ModeSelector";
 import { PhotoDropzone } from "./PhotoDropzone";
@@ -39,7 +39,7 @@ export function RateFlow() {
 
   useEffect(() => {
     if (rating?.status === "completed" && ratingId) {
-      const timer = setTimeout(() => router.push(`/ratings/${ratingId}`), 700);
+      const timer = setTimeout(() => router.push(`/ratings/${ratingId}`), 900);
       return () => clearTimeout(timer);
     }
   }, [rating?.status, ratingId, router]);
@@ -56,7 +56,7 @@ export function RateFlow() {
   if (ratingId) {
     return (
       <div className="space-y-6">
-        <AnalysisProgress status={status} isPolling={isPolling} />
+        <AnalysisScan previewUrl={previewUrl} status={status} />
 
         {rating?.status === "failed" && (
           <>

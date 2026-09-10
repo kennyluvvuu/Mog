@@ -484,8 +484,11 @@ export async function analyzeImageRating(
         },
       ],
       temperature: options.temperature ?? 0.2,
-      maxOutputTokens: options.maxOutputTokens ?? options.maxTokens ?? 1800,
+      maxOutputTokens: options.maxOutputTokens ?? options.maxTokens ?? 900,
       abortSignal: options.abortSignal,
+      providerOptions: {
+        groq: { reasoningEffort: "none" },
+      },
     });
 
     // Извлечение JSON из текста ответа (с очисткой thinking/fences)

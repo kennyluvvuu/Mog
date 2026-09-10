@@ -33,7 +33,7 @@ function mapError(error: unknown): CameraError {
 }
 
 export function useCamera() {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamsRef = useRef<Set<MediaStream>>(new Set());
   const requestIdRef = useRef(0);
   const [isActive, setIsActive] = useState(false);
