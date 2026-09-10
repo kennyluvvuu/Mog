@@ -110,7 +110,7 @@ function sleep(ms: number): Promise<void> {
  * 3. Пути в Supabase Storage (например, `${userId}/${ratingId}.jpg`)
  */
 export async function fetchPhotoBinary(photoPath: string): Promise<Buffer | string> {
-  const trimmed = photoPath.trim();
+  let trimmed = photoPath.trim().replace(/^\/+/, "");
 
   // 1. Уже готовый Data URI
   if (trimmed.startsWith("data:")) {
@@ -129,7 +129,12 @@ export async function fetchPhotoBinary(photoPath: string): Promise<Buffer | stri
     return Buffer.from(arrayBuffer);
   }
 
-  // 3. Относительный путь в приватном бакете Supabase Storage
+  // 3. Если путь включает префикс имени бакета, отсекаем его
+  if (trimmed.startsWith(`${config.ratingsBucket}/`)) {
+    trimmed = trimmed.substring(config.ratingsBucket.length + 1);
+  }
+
+  // Относительный путь в приватном бакете Supabase Storage
   const storageEndpoint = `${config.supabaseUrl}/storage/v1/object/authenticated/${config.ratingsBucket}/${trimmed}`;
   const fallbackEndpoint = `${config.supabaseUrl}/storage/v1/object/${config.ratingsBucket}/${trimmed}`;
 
@@ -147,8 +152,9 @@ export async function fetchPhotoBinary(photoPath: string): Promise<Buffer | stri
   }
 
   if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
     throw new Error(
-      `Ошибка загрузки фото из Supabase Storage [${config.ratingsBucket}/${trimmed}] (${response.status} ${response.statusText})`
+      `Ошибка загрузки фото из Supabase Storage [${config.ratingsBucket}/${trimmed}] (${response.status} ${response.statusText}): ${errorBody}`
     );
   }
 
