@@ -82,7 +82,9 @@ app.notFound((c) =>
 
 // Запуск HTTP-сервера для среды Supabase Edge Runtime / Deno
 if (import.meta.main) {
-  Deno.serve(app.fetch);
+  const port = Number(Deno.env.get("PORT") || 8000);
+  const hostname = Deno.env.get("HOST") || "0.0.0.0";
+  Deno.serve({ port, hostname }, app.fetch);
 }
 
 export default app;

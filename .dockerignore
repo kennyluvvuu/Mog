@@ -1,0 +1,32 @@
+# Git и служебные директории IDE
+.git
+.gitignore
+.cursor
+.vscode
+.zed
+.playwright-mcp
+.agents
+
+# Зависимости и артефакты сборки
+node_modules
+frontend/node_modules
+worker/node_modules
+frontend/.next
+frontend/out
+dist
+build
+
+# Файлы окружения
+.env
+.env.local
+*.env.local
+
+# Логи и временные файлы
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+supabase/.temp
+supabase/.branches

@@ -1,0 +1,107 @@
+services:
+  # ----------------------------------------------------------------------------
+  # Caddy Reverse Proxy (HTTPS / Auto-TLS / HTTP/3 QUIC)
+  # ----------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: mog-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - api
+    networks:
+      - mog-network
+
+  # ----------------------------------------------------------------------------
+  # Frontend — Веб-приложение Next.js
+  # ----------------------------------------------------------------------------
+  frontend:
+    container_name: mog-frontend
+    restart: unless-stopped
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_EDGE_URL: ${NEXT_PUBLIC_EDGE_URL:-}
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_EDGE_URL=${NEXT_PUBLIC_EDGE_URL:-}
+    expose:
+      - "3000"
+    networks:
+      - mog-network
+
+  # ----------------------------------------------------------------------------
+  # API — Supabase Edge Function / Hono REST API на Deno
+  # ----------------------------------------------------------------------------
+  api:
+    container_name: mog-api
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: supabase/functions/api/Dockerfile
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - PUBLIC_SUPABASE_URL=${PUBLIC_SUPABASE_URL:-${SUPABASE_URL}}
+      - DATABASE_URL=${DATABASE_URL:-}
+    expose:
+      - "8000"
+    networks:
+      - mog-network
+
+  # ----------------------------------------------------------------------------
+  # Worker — Фоновый обработчик очереди pgmq на Bun + Groq Vision AI
+  # ----------------------------------------------------------------------------
+  worker:
+    container_name: mog-worker
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      - NODE_ENV=production
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_VISION_MODEL=${GROQ_VISION_MODEL:-qwen/qwen3.6-27b}
+      - DATABASE_URL=${DATABASE_URL}
+      - PGMQ_QUEUE_NAME=${PGMQ_QUEUE_NAME:-rating_tasks}
+      - PGMQ_VT_SECONDS=${PGMQ_VT_SECONDS:-60}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - RATINGS_BUCKET=${RATINGS_BUCKET:-ratings_photos}
+      - WORKER_POLL_INTERVAL_MS=${WORKER_POLL_INTERVAL_MS:-1500}
+      - WORKER_ERROR_COOLDOWN_MS=${WORKER_ERROR_COOLDOWN_MS:-5000}
+      - MAX_TASK_RETRIES=${MAX_TASK_RETRIES:-3}
+      - RATE_LIMIT_INTERVAL_MS=${RATE_LIMIT_INTERVAL_MS:-3500}
+      - RATE_LIMIT_BASE_BACKOFF_SEC=${RATE_LIMIT_BASE_BACKOFF_SEC:-30}
+      - RATE_LIMIT_MAX_BACKOFF_SEC=${RATE_LIMIT_MAX_BACKOFF_SEC:-120}
+      - RATE_LIMIT_MAX_JITTER_SEC=${RATE_LIMIT_MAX_JITTER_SEC:-5}
+    networks:
+      - mog-network
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  mog-network:
+    driver: bridge

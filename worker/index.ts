@@ -57,7 +57,7 @@ export const config: WorkerConfig = {
   groqVisionModel:
     process.env.GROQ_VISION_MODEL ||
     process.env.GROQ_MODEL ||
-    "llama-3.2-11b-vision-preview",
+    "qwen/qwen3.6-27b",
   supabaseUrl:
     process.env.SUPABASE_URL || "http://127.0.0.1:54321",
   supabaseServiceRoleKey:
