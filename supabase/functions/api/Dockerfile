@@ -7,14 +7,11 @@ WORKDIR /app
 ENV PORT=8000
 ENV HOST=0.0.0.0
 
-# Копируем конфигурацию зависимостей Deno
-COPY supabase/functions/api/deno.json supabase/functions/api/deno.lock* ./supabase/functions/api/
-
 # Копируем общие схемы/типы и код API
 COPY supabase/functions/_shared ./supabase/functions/_shared
 COPY supabase/functions/api ./supabase/functions/api
 
-# Предварительно кэшируем все зависимости
+# Кэшируем зависимости Deno
 RUN deno cache --config ./supabase/functions/api/deno.json ./supabase/functions/api/index.ts
 
 EXPOSE 8000

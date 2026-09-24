@@ -9,8 +9,8 @@ ENV NODE_ENV=production
 # Копируем манифест зависимостей
 COPY package.json bun.lock* ./
 
-# Устанавливаем production-зависимости воркера
-RUN bun install --production
+# Устанавливаем production-зависимости воркера без жесткой привязки к lockfile
+RUN bun install --production --no-frozen-lockfile
 
 # Копируем схему базы данных, общие типы и код воркера
 COPY db.schema.ts db.types.ts ./
