@@ -20,12 +20,12 @@
     "@types/bun": "latest",
     "@types/pg": "^8.23.1"
   },
-  "peerDependencies": {
-    "typescript": "^7"
-  },
   "dependencies": {
+    "@ai-sdk/groq": "^4.0.40",
+    "ai": "^7.0.97",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "zod": "^4.6.1"
   }
 }

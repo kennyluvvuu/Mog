@@ -6,19 +6,15 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Копируем манифесты зависимостей
-COPY package.json bun.lock ./
-COPY worker/package.json worker/bun.lock* ./worker/
+# Копируем манифест зависимостей
+COPY package.json bun.lock* ./
 
-# Устанавливаем зависимости для корня и воркера
-RUN bun install --production --frozen-lockfile || bun install --production
-RUN cd worker && (bun install --production --frozen-lockfile || bun install --production)
+# Устанавливаем production-зависимости воркера без жесткой привязки к lockfile
+RUN bun install --production --no-frozen-lockfile
 
-# Копируем схему базы данных, общие типы и функции
+# Копируем схему базы данных, общие типы и код воркера
 COPY db.schema.ts db.types.ts ./
 COPY supabase/functions/_shared ./supabase/functions/_shared
-
-# Копируем исходный код воркера
 COPY worker ./worker
 
 # Безопасность: непривилегированный пользователь bun
