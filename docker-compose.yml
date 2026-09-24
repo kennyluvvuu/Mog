@@ -69,10 +69,14 @@ services:
     expose:
       - "8000"
     depends_on:
-      - db
-      - auth
-      - rest
-      - storage
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_started
+      rest:
+        condition: service_started
+      storage:
+        condition: service_started
     networks:
       - mog-network
 
@@ -100,8 +104,10 @@ services:
       - RATE_LIMIT_MAX_BACKOFF_SEC=${RATE_LIMIT_MAX_BACKOFF_SEC:-120}
       - RATE_LIMIT_MAX_JITTER_SEC=${RATE_LIMIT_MAX_JITTER_SEC:-5}
     depends_on:
-      - db
-      - storage
+      db:
+        condition: service_healthy
+      storage:
+        condition: service_started
     networks:
       - mog-network
 
@@ -116,10 +122,14 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
     environment:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password_123}
       POSTGRES_DB: postgres
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: 3600
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./supabase/docker-init/01-setup.sql:/docker-entrypoint-initdb.d/99-mog-setup.sql:ro
@@ -136,7 +146,7 @@ services:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: https://${DOMAIN:-localhost}
-      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-postgres_password_123}@db:5432/postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-postgres_password_123}@db:5432/postgres?search_path=auth
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_SITE_URL: https://${DOMAIN:-localhost}
       GOTRUE_URI_ALLOW_LIST: "*"

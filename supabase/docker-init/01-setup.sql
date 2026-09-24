@@ -4,11 +4,189 @@
 
 SET check_function_bodies = off;
 
--- 1. Схема drizzle для трекинга миграций
-CREATE SCHEMA IF NOT EXISTS "drizzle";
+-- 1. Создание всех системных ролей Supabase
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
+    CREATE ROLE postgres WITH SUPERUSER CREATEDB CREATEROLE REPLICATION BYPASSRLS LOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    CREATE ROLE anon NOLOGIN NOINHERIT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    CREATE ROLE authenticated NOLOGIN NOINHERIT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticator') THEN
+    CREATE ROLE authenticator WITH NOINHERIT LOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_auth_admin') THEN
+    CREATE ROLE supabase_auth_admin WITH SUPERUSER CREATEDB CREATEROLE LOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_storage_admin') THEN
+    CREATE ROLE supabase_storage_admin WITH SUPERUSER CREATEDB CREATEROLE LOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_admin') THEN
+    CREATE ROLE supabase_admin WITH SUPERUSER CREATEDB CREATEROLE REPLICATION BYPASSRLS LOGIN;
+  END IF;
+END $$;
 
--- 2. Расширение pgmq
+-- Назначение ролей для authenticator
+GRANT anon TO authenticator;
+GRANT authenticated TO authenticator;
+GRANT service_role TO authenticator;
+GRANT supabase_admin TO authenticator;
+
+-- Установка паролей пользователей
+\set pgpass `echo "${POSTGRES_PASSWORD:-postgres_password_123}"`
+ALTER USER postgres WITH PASSWORD :'pgpass';
+ALTER USER authenticator WITH PASSWORD :'pgpass';
+ALTER USER supabase_auth_admin WITH PASSWORD :'pgpass';
+ALTER USER supabase_storage_admin WITH PASSWORD :'pgpass';
+ALTER USER supabase_admin WITH PASSWORD :'pgpass';
+
+-- Владелец базы данных
+ALTER DATABASE postgres OWNER TO postgres;
+
+-- Конфигурация JWT для базы данных
+\set jwt_sec `echo "${JWT_SECRET}"`
+ALTER DATABASE postgres SET "app.settings.jwt_secret" TO :'jwt_sec';
+ALTER DATABASE postgres SET "app.settings.jwt_exp" TO '3600';
+
+-- 2. Базовые расширения и схемы
+CREATE SCHEMA IF NOT EXISTS "extensions";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS "pgjwt" SCHEMA extensions;
 CREATE EXTENSION IF NOT EXISTS "pgmq";
+
+-- Realtime публикация
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+END $$;
+
+-- 3. Схема auth и функции uid(), role(), email()
+CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_admin;
+ALTER USER supabase_auth_admin SET search_path TO auth, public;
+
+CREATE TABLE IF NOT EXISTS auth.users (
+  instance_id uuid NULL,
+  id uuid NOT NULL,
+  aud varchar(255) NULL,
+  "role" varchar(255) NULL,
+  email varchar(255) NULL UNIQUE,
+  encrypted_password varchar(255) NULL,
+  email_confirmed_at timestamptz NULL,
+  invited_at timestamptz NULL,
+  confirmation_token varchar(255) NULL,
+  confirmation_sent_at timestamptz NULL,
+  recovery_token varchar(255) NULL,
+  recovery_sent_at timestamptz NULL,
+  email_change_token_new varchar(255) NULL,
+  email_change varchar(255) NULL,
+  email_change_sent_at timestamptz NULL,
+  last_sign_in_at timestamptz NULL,
+  raw_app_meta_data jsonb NULL,
+  raw_user_meta_data jsonb NULL,
+  is_super_admin bool NULL,
+  created_at timestamptz NULL,
+  updated_at timestamptz NULL,
+  phone text UNIQUE DEFAULT NULL,
+  phone_confirmed_at timestamptz NULL,
+  phone_change text DEFAULT '',
+  phone_change_token varchar(255) DEFAULT '',
+  phone_change_sent_at timestamptz NULL,
+  confirmed_at timestamptz NULL,
+  email_change_token_current varchar(255) DEFAULT '',
+  email_change_confirm_status smallint DEFAULT 0,
+  banned_until timestamptz NULL,
+  reauthentication_token varchar(255) DEFAULT '',
+  reauthentication_sent_at timestamptz NULL,
+  is_sso_user bool NOT NULL DEFAULT false,
+  deleted_at timestamptz NULL,
+  is_anonymous bool NOT NULL DEFAULT false,
+  CONSTRAINT users_pkey PRIMARY KEY (id)
+);
+
+CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$
+  SELECT coalesce(
+    nullif(current_setting('request.jwt.claim.sub', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
+  )::uuid;
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION auth.role() RETURNS text AS $$
+  SELECT coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')
+  )::text;
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION auth.email() RETURNS text AS $$
+  SELECT coalesce(
+    nullif(current_setting('request.jwt.claim.email', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email')
+  )::text;
+$$ LANGUAGE sql STABLE;
+
+GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role, postgres;
+GRANT ALL ON ALL TABLES IN SCHEMA auth TO postgres, supabase_auth_admin;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO postgres, supabase_auth_admin;
+GRANT ALL ON ALL ROUTINES IN SCHEMA auth TO postgres, supabase_auth_admin;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO anon, authenticated, service_role, postgres;
+
+-- 4. Схема storage
+CREATE SCHEMA IF NOT EXISTS storage AUTHORIZATION supabase_admin;
+ALTER USER supabase_storage_admin SET search_path TO storage, public;
+
+CREATE TABLE IF NOT EXISTS storage.buckets (
+  id text NOT NULL PRIMARY KEY,
+  name text NOT NULL,
+  owner uuid REFERENCES auth.users(id),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  public boolean DEFAULT false,
+  avif_autodetection boolean DEFAULT false,
+  file_size_limit bigint,
+  allowed_mime_types text[],
+  owner_id text
+);
+
+CREATE TABLE IF NOT EXISTS storage.objects (
+  id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  bucket_id text REFERENCES storage.buckets(id),
+  name text,
+  owner uuid REFERENCES auth.users(id),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  last_accessed_at timestamptz DEFAULT now(),
+  metadata jsonb,
+  path_tokens text[] GENERATED ALWAYS AS (string_to_array(name, '/')) STORED,
+  version text,
+  owner_id text,
+  user_metadata jsonb
+);
+
+GRANT USAGE ON SCHEMA storage TO postgres, anon, authenticated, service_role, supabase_storage_admin;
+GRANT ALL ON ALL TABLES IN SCHEMA storage TO postgres, anon, authenticated, service_role, supabase_storage_admin;
+GRANT ALL ON ALL ROUTINES IN SCHEMA storage TO postgres, anon, authenticated, service_role, supabase_storage_admin;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA storage TO postgres, anon, authenticated, service_role, supabase_storage_admin;
+
+-- 5. Права доступа к public и extensions схемам
+GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA extensions TO postgres, anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres, anon, authenticated, service_role;
+
+-- 6. Схема drizzle для трекинга миграций
+CREATE SCHEMA IF NOT EXISTS "drizzle";
 
 CREATE SEQUENCE IF NOT EXISTS "drizzle"."__drizzle_migrations_id_seq" AS integer INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1 NO CYCLE;
 
@@ -19,7 +197,7 @@ CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
   CONSTRAINT "__drizzle_migrations_pkey" PRIMARY KEY (id)
 );
 
--- 3. Таблица profiles
+-- 7. Таблица profiles
 CREATE TABLE IF NOT EXISTS "public"."profiles" (
   "id"         uuid                     NOT NULL,
   "username"   text,
@@ -32,7 +210,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
 
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
--- 4. Типы луксмаксинга и статусов
+-- 8. Типы луксмаксинга и статусов
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'looksmaxxing_tier') THEN
@@ -57,7 +235,7 @@ BEGIN
   END IF;
 END $$;
 
--- 5. Таблица ratings
+-- 9. Таблица ratings
 CREATE TABLE IF NOT EXISTS "public"."ratings" (
   "id"                uuid                     NOT NULL DEFAULT gen_random_uuid(),
   "user_id"           uuid                     NOT NULL,
@@ -76,7 +254,7 @@ CREATE TABLE IF NOT EXISTS "public"."ratings" (
 
 ALTER TABLE "public"."ratings" ENABLE ROW LEVEL SECURITY;
 
--- 6. Внешние ключи
+-- 10. Внешние ключи
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_id_users_id_fk') THEN
@@ -90,11 +268,11 @@ BEGIN
   END IF;
 END $$;
 
--- 7. Индексы
+-- 11. Индексы
 CREATE INDEX IF NOT EXISTS ratings_created_at_idx ON public.ratings USING btree (created_at);
 CREATE INDEX IF NOT EXISTS ratings_user_id_idx ON public.ratings USING btree (user_id);
 
--- 8. Функция постановки в очередь pgmq
+-- 12. Функция постановки в очередь pgmq
 CREATE OR REPLACE FUNCTION public.enqueue_rating_task (
   p_rating_id   uuid,
   p_user_id     uuid,
@@ -123,7 +301,7 @@ BEGIN
 END;
 $function$;
 
--- 9. Функция уведомления об изменениях (SSE / LISTEN-NOTIFY)
+-- 13. Функция уведомления об изменениях (SSE / LISTEN-NOTIFY)
 CREATE OR REPLACE FUNCTION public.notify_rating_update()
   RETURNS TRIGGER
   LANGUAGE plpgsql
@@ -157,7 +335,7 @@ CREATE TRIGGER trigger_notify_rating_update
   FOR EACH ROW
   EXECUTE FUNCTION public.notify_rating_update();
 
--- 10. Политики RLS
+-- 14. Политики RLS
 DO $$
 BEGIN
   -- Profiles
@@ -186,13 +364,13 @@ BEGIN
   END IF;
 END $$;
 
--- 11. Права доступа
+-- 15. Права доступа к объектам приложения
 GRANT EXECUTE ON FUNCTION "public"."enqueue_rating_task"(uuid, uuid, text, text) TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
 GRANT EXECUTE ON FUNCTION "public"."notify_rating_update"() TO PUBLIC, "anon", "authenticated", "postgres", "service_role";
 GRANT ALL ON TABLE "public"."profiles" TO "anon", "authenticated", "postgres", "service_role";
 GRANT ALL ON TABLE "public"."ratings" TO "anon", "authenticated", "postgres", "service_role";
 
--- 12. Создание очереди pgmq (rating_tasks)
+-- 16. Создание очереди pgmq (rating_tasks) и гранты
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pgmq.meta WHERE queue_name = 'rating_tasks') THEN
@@ -200,12 +378,16 @@ BEGIN
   END IF;
 END $$;
 
--- 13. Автоматическое создание приватного бакета Storage для фотографий
+GRANT USAGE ON SCHEMA pgmq TO postgres, service_role, anon, authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA pgmq TO postgres, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA pgmq TO postgres, service_role;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA pgmq TO postgres, service_role;
+
+-- 17. Автоматическое создание бакетов Storage
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES ('ratings_photos', 'ratings_photos', false, 52428800, ARRAY['image/jpeg', 'image/png', 'image/webp'])
 ON CONFLICT (id) DO NOTHING;
 
--- 14. Автоматическое создание бакета для аватарок
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES ('avatars', 'avatars', true, 10485760, ARRAY['image/jpeg', 'image/png', 'image/webp'])
 ON CONFLICT (id) DO NOTHING;
