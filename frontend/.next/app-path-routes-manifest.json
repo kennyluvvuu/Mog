@@ -1,0 +1,16 @@
+{
+  "/(auth)/sign-in/page": "/sign-in",
+  "/(auth)/sign-up/page": "/sign-up",
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/about/page": "/about",
+  "/dashboard/page": "/dashboard",
+  "/faq/page": "/faq",
+  "/how-it-works/page": "/how-it-works",
+  "/page": "/",
+  "/privacy/page": "/privacy",
+  "/profile/page": "/profile",
+  "/rate/page": "/rate",
+  "/ratings/[id]/page": "/ratings/[id]",
+  "/tiers/page": "/tiers"
+}

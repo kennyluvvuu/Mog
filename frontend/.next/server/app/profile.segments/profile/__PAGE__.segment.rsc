@@ -1,0 +1,22 @@
+1:"$Sreact.fragment"
+2:I[33886,["/_next/static/chunks/0h2qsuyze9ds1.js","/_next/static/chunks/2aaah4g5oifaq.js","/_next/static/chunks/0ns0n5papwrcq.js","/_next/static/chunks/2c_i1if9fz4d7.js","/_next/static/chunks/3nuoejywg72yv.js","/_next/static/chunks/23hdy45w9-yac.js","/_next/static/chunks/30jy5fqhkjlyi.js","/_next/static/chunks/2cd9bt68qwaa-.js","/_next/static/chunks/3wdmp9yad6io0.js"],"AuthGuard"]
+3:I[66801,["/_next/static/chunks/0h2qsuyze9ds1.js","/_next/static/chunks/2aaah4g5oifaq.js","/_next/static/chunks/0ns0n5papwrcq.js","/_next/static/chunks/2c_i1if9fz4d7.js","/_next/static/chunks/3nuoejywg72yv.js","/_next/static/chunks/23hdy45w9-yac.js","/_next/static/chunks/30jy5fqhkjlyi.js","/_next/static/chunks/2cd9bt68qwaa-.js","/_next/static/chunks/3wdmp9yad6io0.js"],"ProfileForm"]
+4:I[97367,["/_next/static/chunks/0h2qsuyze9ds1.js","/_next/static/chunks/2aaah4g5oifaq.js","/_next/static/chunks/0ns0n5papwrcq.js","/_next/static/chunks/2c_i1if9fz4d7.js","/_next/static/chunks/3nuoejywg72yv.js","/_next/static/chunks/23hdy45w9-yac.js"],"OutletBoundary"]
+5:"$Sreact.suspense"
+9:I[97367,["/_next/static/chunks/0h2qsuyze9ds1.js","/_next/static/chunks/2aaah4g5oifaq.js","/_next/static/chunks/0ns0n5papwrcq.js","/_next/static/chunks/2c_i1if9fz4d7.js","/_next/static/chunks/3nuoejywg72yv.js","/_next/static/chunks/23hdy45w9-yac.js"],"ViewportBoundary"]
+a:I[97367,["/_next/static/chunks/0h2qsuyze9ds1.js","/_next/static/chunks/2aaah4g5oifaq.js","/_next/static/chunks/0ns0n5papwrcq.js","/_next/static/chunks/2c_i1if9fz4d7.js","/_next/static/chunks/3nuoejywg72yv.js","/_next/static/chunks/23hdy45w9-yac.js"],"MetadataBoundary"]
+b:I[27201,["/_next/static/chunks/0h2qsuyze9ds1.js","/_next/static/chunks/2aaah4g5oifaq.js","/_next/static/chunks/0ns0n5papwrcq.js","/_next/static/chunks/2c_i1if9fz4d7.js","/_next/static/chunks/3nuoejywg72yv.js","/_next/static/chunks/23hdy45w9-yac.js"],"IconMark"]
+d:I[39756,["/_next/static/chunks/0h2qsuyze9ds1.js","/_next/static/chunks/2aaah4g5oifaq.js","/_next/static/chunks/0ns0n5papwrcq.js","/_next/static/chunks/2c_i1if9fz4d7.js","/_next/static/chunks/3nuoejywg72yv.js","/_next/static/chunks/23hdy45w9-yac.js"],"default"]
+e:I[37457,["/_next/static/chunks/0h2qsuyze9ds1.js","/_next/static/chunks/2aaah4g5oifaq.js","/_next/static/chunks/0ns0n5papwrcq.js","/_next/static/chunks/2c_i1if9fz4d7.js","/_next/static/chunks/3nuoejywg72yv.js","/_next/static/chunks/23hdy45w9-yac.js"],"default"]
+8:X
+10:X
+10:C
+0:{"buildId":"SjhXF6c7aC3RLr5ygl5jC","data":[{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"children":["$","div",null,{"className":"mx-auto max-w-2xl px-4 py-12 sm:px-6","children":[["$","header",null,{"className":"mb-10","children":[["$","h1",null,{"className":"text-balance text-4xl font-semibold tracking-tight","children":"Профиль"}],["$","p",null,{"className":"mt-3 text-muted-foreground","children":"Данные аккаунта и публичный никнейм"}]]}],["$","$L3",null,{}]]}]}],[["$","script","script-0",{"src":"/_next/static/chunks/30jy5fqhkjlyi.js","async":true}],["$","script","script-1",{"src":"/_next/static/chunks/2cd9bt68qwaa-.js","async":true}],["$","script","script-2",{"src":"/_next/static/chunks/3wdmp9yad6io0.js","async":true}]],["$","$L4",null,{"children":["$","$5",null,{"name":"Next.MetadataOutlet","children":"$@6"}]}]]}],"isPartial":"$@7","staleTime":"$8","varyParams":null},{"rsc":["$","$1","h",{"children":[null,["$","$L9",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$La",null,{"children":["$","$5",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Профиль · mog"}],["$","meta","1",{"name":"description","content":"Загрузите фото и получите честный разбор черт лица по шкале от sub3 до true adam: балл, метрики и практические советы."}],["$","link","2",{"rel":"icon","href":"/logo.jpeg"}],["$","link","3",{"rel":"apple-touch-icon","href":"/logo.jpeg"}],["$","$Lb","4",{}]]}]}]}],["$","meta",null,{"name":"next-size-adjust","content":""}]]}],"isPartial":"$@c","staleTime":"$8","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","$Ld",null,{"parallelRouterKey":"children","template":["$","$Le",null,{}]}]]}],"isPartial":"$@f","staleTime":"$8","varyParams":"$10"}],"isUpgradeableISRFallback":false,"a":"$@11","rootVaryParams":null,"needsRuntimeRequest":"$@12"}
+6:null
+12:true
+8:300
+8:C
+11:0
+c:"$undefined"
+f:"$undefined"
+7:"$undefined"

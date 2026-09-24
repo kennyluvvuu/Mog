@@ -1,0 +1,3 @@
+module.exports=[78141,a=>{"use strict";var b=a.i(87924),c=a.i(72131),d=a.i(40695);a.s(["default",0,function({error:a,reset:e}){return(0,c.useEffect)(()=>{console.error(a)},[a]),(0,b.jsxs)("div",{className:"flex min-h-[70vh] flex-col items-center justify-center gap-6 px-4 text-center",children:[(0,b.jsxs)("div",{className:"space-y-2",children:[(0,b.jsx)("h1",{className:"text-2xl font-semibold tracking-tight",children:"Что-то пошло не так"}),(0,b.jsx)("p",{className:"max-w-md text-muted-foreground",children:a.message||"Непредвиденная ошибка приложения"})]}),(0,b.jsx)(d.Button,{onClick:e,children:"Попробовать снова"})]})}])}];
+
+//# sourceMappingURL=app_error_tsx_20-epnw._.js.map
