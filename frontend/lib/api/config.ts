@@ -22,6 +22,8 @@ export const SUPABASE_ANON_KEY = requireEnv(
 export const AUTH_URL = `${SUPABASE_URL}/auth/v1`;
 export const REST_URL = `${SUPABASE_URL}/rest/v1`;
 export const STORAGE_URL = `${SUPABASE_URL}/storage/v1`;
-export const EDGE_URL = `${SUPABASE_URL}/functions/v1/api`;
+export const EDGE_URL =
+  process.env.NEXT_PUBLIC_EDGE_URL?.replace(/\/$/, "") ||
+  `${SUPABASE_URL}/functions/v1/api`;
 
 export const RATINGS_BUCKET = "ratings_photos";

@@ -84,6 +84,33 @@ bun run supabase:stop
 
 ---
 
+## 🚢 Развертывание в продакшене (Docker Compose + Caddy)
+
+Для развертывания полного стека в продакшене (Next.js Frontend, Deno Hono API, Bun Worker, Caddy Reverse Proxy с автоматическим SSL):
+
+1. **Скопируйте и настройте единый `.env` файл в корне:**
+   ```bash
+   cp .env.example .env
+   ```
+   Укажите ваш домен в переменной `DOMAIN` (например, `mog.example.com`), подключение к базе данных Supabase (`DATABASE_URL`), ключи Supabase и API-ключ Groq (`GROQ_API_KEY`).
+
+2. **Соберите и запустите стек сервисов:**
+   ```bash
+   docker compose up -d --build
+   ```
+
+3. **Просмотр логов:**
+   ```bash
+   docker compose logs -f
+   ```
+
+4. **Остановка сервисов:**
+   ```bash
+   docker compose down
+   ```
+
+---
+
 ## 📚 Документация
 - **Спецификация API для ИИ-агентов:** [supabase/API.md](supabase/API.md)
 - **Архитектурный манифест проекта:** [AGENTS.md](AGENTS.md)
