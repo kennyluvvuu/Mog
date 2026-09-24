@@ -19,7 +19,9 @@ services:
     depends_on:
       - frontend
       - api
-      - kong
+      - auth
+      - rest
+      - storage
     networks:
       - mog-network
 
@@ -45,7 +47,8 @@ services:
       - "3000"
     depends_on:
       - api
-      - kong
+      - auth
+      - rest
     networks:
       - mog-network
 
@@ -58,7 +61,7 @@ services:
     environment:
       - PORT=8000
       - HOST=0.0.0.0
-      - SUPABASE_URL=http://kong:8000
+      - SUPABASE_URL=http://caddy
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - PUBLIC_SUPABASE_URL=https://${DOMAIN:-localhost}
@@ -67,7 +70,9 @@ services:
       - "8000"
     depends_on:
       - db
-      - kong
+      - auth
+      - rest
+      - storage
     networks:
       - mog-network
 
@@ -84,7 +89,7 @@ services:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres_password_123}@db:5432/postgres
       - PGMQ_QUEUE_NAME=${PGMQ_QUEUE_NAME:-rating_tasks}
       - PGMQ_VT_SECONDS=${PGMQ_VT_SECONDS:-60}
-      - SUPABASE_URL=http://kong:8000
+      - SUPABASE_URL=http://caddy
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - RATINGS_BUCKET=${RATINGS_BUCKET:-ratings_photos}
       - WORKER_POLL_INTERVAL_MS=${WORKER_POLL_INTERVAL_MS:-1500}
@@ -97,17 +102,21 @@ services:
     depends_on:
       - db
       - storage
-      - kong
     networks:
       - mog-network
 
   # ============================================================================
-  # 3. SUPABASE SELF-HOSTED SERVICES (DB, AUTH, REST, STORAGE, KONG, STUDIO)
+  # 3. SUPABASE SELF-HOSTED SERVICES (DB, AUTH, REST, STORAGE, STUDIO)
   # ============================================================================
   db:
-    image: supabase/postgres:15.8.1.085
+    image: supabase/postgres:17.6.1.136
     container_name: mog-supabase-db
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password_123}
       POSTGRES_DB: postgres
@@ -120,7 +129,7 @@ services:
       - mog-network
 
   auth:
-    image: supabase/gotrue:v2.164.0
+    image: supabase/gotrue:v2.196.0
     container_name: mog-supabase-auth
     restart: unless-stopped
     environment:
@@ -138,12 +147,13 @@ services:
       GOTRUE_MAILER_AUTOCONFIRM: "true"
       GOTRUE_DISABLE_SIGNUP: "false"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - mog-network
 
   rest:
-    image: postgrest/postgrest:v12.2.0
+    image: postgrest/postgrest:v12.2.3
     container_name: mog-supabase-rest
     restart: unless-stopped
     environment:
@@ -153,19 +163,20 @@ services:
       PGRST_JWT_SECRET: ${JWT_SECRET}
       PGRST_DB_USE_BUILTIN_AUTH: "false"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - mog-network
 
   storage:
-    image: supabase/storage-api:v1.11.13
+    image: supabase/storage-api:v1.74.0
     container_name: mog-supabase-storage
     restart: unless-stopped
     environment:
       ANON_KEY: ${SUPABASE_ANON_KEY}
       SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       POSTGREST_URL: http://rest:3000
-      PGRST_JWT_SECRET: ${JWT_SECRET}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD:-postgres_password_123}@db:5432/postgres
       FILE_SIZE_LIMIT: 52428800
       STORAGE_BACKEND: file
@@ -173,36 +184,19 @@ services:
       TENANT_ID: stub
       REGION: stub
       GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false"
     volumes:
       - storage_data:/var/lib/storage
     depends_on:
-      - db
-      - rest
-    networks:
-      - mog-network
-
-  kong:
-    image: kong:2.8.1
-    container_name: mog-supabase-kong
-    restart: unless-stopped
-    environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
-      KONG_DNS_ORDER: LAST,A,CNAME
-      KONG_PLUGINS: request-transformer,cors,key-auth,acl
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
-    volumes:
-      - ./supabase/docker-init/kong.yml:/var/lib/kong/kong.yml:ro
-    depends_on:
-      - auth
-      - rest
-      - storage
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
     networks:
       - mog-network
 
   meta:
-    image: supabase/postgres-meta:v0.84.2
+    image: supabase/postgres-meta:v0.99.0
     container_name: mog-supabase-meta
     restart: unless-stopped
     environment:
@@ -213,28 +207,34 @@ services:
       PG_META_DB_USER: postgres
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password_123}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - mog-network
 
   studio:
-    image: supabase/studio:20241007-6bbd92b
+    image: supabase/studio:2026.09.07-sha-7996410
     container_name: mog-supabase-studio
     restart: unless-stopped
     environment:
       STUDIO_PG_META_URL: http://meta:8080
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password_123}
-      SUPABASE_URL: http://kong:8000
-      SUPABASE_REST_URL: http://kong:8000/rest/v1
+      POSTGRES_PORT: 5432
+      POSTGRES_HOST: db
+      POSTGRES_DB: postgres
+      POSTGRES_USER_READ_WRITE: postgres
+      SUPABASE_URL: http://caddy
+      SUPABASE_PUBLIC_URL: https://${DOMAIN:-localhost}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       AUTH_JWT_SECRET: ${JWT_SECRET}
     ports:
       - "54323:3000"
     depends_on:
-      - db
-      - meta
-      - kong
+      db:
+        condition: service_healthy
+      meta:
+        condition: service_started
     networks:
       - mog-network
 
