@@ -1,7 +1,7 @@
 services:
-  # ----------------------------------------------------------------------------
-  # Caddy Reverse Proxy (HTTPS / Auto-TLS / HTTP/3 QUIC)
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 1. CADDY REVERSE PROXY (HTTPS / AUTO-TLS / ROUTING)
+  # ============================================================================
   caddy:
     image: caddy:2-alpine
     container_name: mog-caddy
@@ -19,12 +19,13 @@ services:
     depends_on:
       - frontend
       - api
+      - kong
     networks:
       - mog-network
 
-  # ----------------------------------------------------------------------------
-  # Frontend — Веб-приложение Next.js
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 2. APPLICATION SERVICES (FRONTEND, EDGE API, WORKER)
+  # ============================================================================
   frontend:
     container_name: mog-frontend
     restart: unless-stopped
@@ -32,24 +33,22 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-        NEXT_PUBLIC_EDGE_URL: ${NEXT_PUBLIC_EDGE_URL:-}
+        NEXT_PUBLIC_SUPABASE_URL: https://${DOMAIN:-localhost}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
     environment:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      - NEXT_PUBLIC_EDGE_URL=${NEXT_PUBLIC_EDGE_URL:-}
+      - NEXT_PUBLIC_SUPABASE_URL=https://${DOMAIN:-localhost}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     expose:
       - "3000"
+    depends_on:
+      - api
+      - kong
     networks:
       - mog-network
 
-  # ----------------------------------------------------------------------------
-  # API — Supabase Edge Function / Hono REST API на Deno
-  # ----------------------------------------------------------------------------
   api:
     container_name: mog-api
     restart: unless-stopped
@@ -59,19 +58,19 @@ services:
     environment:
       - PORT=8000
       - HOST=0.0.0.0
-      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_URL=http://kong:8000
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - PUBLIC_SUPABASE_URL=${PUBLIC_SUPABASE_URL:-${SUPABASE_URL}}
-      - DATABASE_URL=${DATABASE_URL:-}
+      - PUBLIC_SUPABASE_URL=https://${DOMAIN:-localhost}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres_password_123}@db:5432/postgres
     expose:
       - "8000"
+    depends_on:
+      - db
+      - kong
     networks:
       - mog-network
 
-  # ----------------------------------------------------------------------------
-  # Worker — Фоновый обработчик очереди pgmq на Bun + Groq Vision AI
-  # ----------------------------------------------------------------------------
   worker:
     container_name: mog-worker
     restart: unless-stopped
@@ -82,10 +81,10 @@ services:
       - NODE_ENV=production
       - GROQ_API_KEY=${GROQ_API_KEY}
       - GROQ_VISION_MODEL=${GROQ_VISION_MODEL:-qwen/qwen3.6-27b}
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres_password_123}@db:5432/postgres
       - PGMQ_QUEUE_NAME=${PGMQ_QUEUE_NAME:-rating_tasks}
       - PGMQ_VT_SECONDS=${PGMQ_VT_SECONDS:-60}
-      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_URL=http://kong:8000
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - RATINGS_BUCKET=${RATINGS_BUCKET:-ratings_photos}
       - WORKER_POLL_INTERVAL_MS=${WORKER_POLL_INTERVAL_MS:-1500}
@@ -95,13 +94,157 @@ services:
       - RATE_LIMIT_BASE_BACKOFF_SEC=${RATE_LIMIT_BASE_BACKOFF_SEC:-30}
       - RATE_LIMIT_MAX_BACKOFF_SEC=${RATE_LIMIT_MAX_BACKOFF_SEC:-120}
       - RATE_LIMIT_MAX_JITTER_SEC=${RATE_LIMIT_MAX_JITTER_SEC:-5}
+    depends_on:
+      - db
+      - storage
+      - kong
+    networks:
+      - mog-network
+
+  # ============================================================================
+  # 3. SUPABASE SELF-HOSTED SERVICES (DB, AUTH, REST, STORAGE, KONG, STUDIO)
+  # ============================================================================
+  db:
+    image: supabase/postgres:15.8.1.085
+    container_name: mog-supabase-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password_123}
+      POSTGRES_DB: postgres
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./supabase/docker-init/01-setup.sql:/docker-entrypoint-initdb.d/99-mog-setup.sql:ro
+    ports:
+      - "54322:5432"
+    networks:
+      - mog-network
+
+  auth:
+    image: supabase/gotrue:v2.164.0
+    container_name: mog-supabase-auth
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: https://${DOMAIN:-localhost}
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-postgres_password_123}@db:5432/postgres
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_SITE_URL: https://${DOMAIN:-localhost}
+      GOTRUE_URI_ALLOW_LIST: "*"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_DISABLE_SIGNUP: "false"
+    depends_on:
+      - db
+    networks:
+      - mog-network
+
+  rest:
+    image: postgrest/postgrest:v12.2.0
+    container_name: mog-supabase-rest
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:-postgres_password_123}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_BUILTIN_AUTH: "false"
+    depends_on:
+      - db
+    networks:
+      - mog-network
+
+  storage:
+    image: supabase/storage-api:v1.11.13
+    container_name: mog-supabase-storage
+    restart: unless-stopped
+    environment:
+      ANON_KEY: ${SUPABASE_ANON_KEY}
+      SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD:-postgres_password_123}@db:5432/postgres
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+    volumes:
+      - storage_data:/var/lib/storage
+    depends_on:
+      - db
+      - rest
+    networks:
+      - mog-network
+
+  kong:
+    image: kong:2.8.1
+    container_name: mog-supabase-kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+    volumes:
+      - ./supabase/docker-init/kong.yml:/var/lib/kong/kong.yml:ro
+    depends_on:
+      - auth
+      - rest
+      - storage
+    networks:
+      - mog-network
+
+  meta:
+    image: supabase/postgres-meta:v0.84.2
+    container_name: mog-supabase-meta
+    restart: unless-stopped
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: postgres
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password_123}
+    depends_on:
+      - db
+    networks:
+      - mog-network
+
+  studio:
+    image: supabase/studio:20241007-6bbd92b
+    container_name: mog-supabase-studio
+    restart: unless-stopped
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password_123}
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_REST_URL: http://kong:8000/rest/v1
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "54323:3000"
+    depends_on:
+      - db
+      - meta
+      - kong
     networks:
       - mog-network
 
 volumes:
   caddy_data:
   caddy_config:
+  db_data:
+  storage_data:
 
 networks:
   mog-network:
+    name: mog-network
     driver: bridge
