@@ -1,0 +1,41 @@
+# ==============================================================================
+# Конфигурация Caddy Reverse Proxy (Production)
+# Домен настраивается через переменную DOMAIN в корневом .env файле
+# ==============================================================================
+
+{$DOMAIN:localhost} {
+    # Сжатие ответов (Zstandard и Gzip)
+    encode zstd gzip
+
+    # Заголовки безопасности
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    }
+
+    # API маршруты (Hono Edge API на Deno)
+    # Включает поддержку Server-Sent Events (SSE) стриминга (/ratings/:id/stream)
+    @api path /api/* /functions/v1/api/*
+    handle @api {
+        reverse_proxy api:8000 {
+            # Отключение буферизации для real-time SSE стримов
+            flush_interval -1
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Все остальные запросы направляются на Next.js Frontend
+    handle {
+        reverse_proxy frontend:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}
